@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Guess the Number Game with Photo & Prizes</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(120deg, #2980b9, #8e44ad);
+    color: white;
+    margin: 0; padding: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.container {
+    background: #2c3e50;
+    padding: 30px 40px;
+    border-radius: 10px;
+    max-width: 400px;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+}
+input[type="text"], input[type="number"], input[type="file"] {
+    width: 100%;
+    padding: 10px;
+    border-radius: 6px;
+    border: none;
+    margin: 10px 0 20px 0;
+    font-size: 16px;
+}
+button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    background-color: #e67e22;
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    width: 100%;
+    font-size: 16px;
+}
+button:hover {
+    background-color: #d35400;
+}
+.hidden {
+    display: none;
+}
+#errorMsg, #moneyError, #loginError {
+    color: #ff6b6b;
+    margin-bottom: 15px;
+}
+#infoBox {
+    background-color: #34495e;
+    padding: 15px;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 15px;
+    text-align: left;
+}
+#photoPreview img {
+    max-width: 100px;
+    border-radius: 50%;
+    margin-top: 10px;
+}
+#prizePoints {
+    margin: 10px 0;
+    font-weight: bold;
+    font-size: 16px;
+    color: #f1c40f;
+}
+#btnRestart {
+    background-color: #c0392b;
+    margin-top: 20px;
+}
+
+/* Leaderboard styles */
+#leaderboard {
+    margin-top: 20px; 
+    text-align: left; 
+    background: #1abc9c; 
+    padding: 10px; 
+    border-radius: 8px; 
+    color: black;
+    max-height: 150px;
+    overflow-y: auto;
+}
+#leaderboard h3 {
+    margin-top: 0;
+}
+#leaderboardList {
+    padding-left: 20px;
+    margin: 0;
+}
+</style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div class="container" id="loginDiv">
+    <h2>Welcome! Enter your username and upload your photo</h2>
+    <input type="text" id="username" placeholder="Enter username" />
+    <input type="file" id="photoUpload" accept="image/*" />
+    <div id="photoPreview"></div>
+    <div id="loginError"></div>
+    <button id="btnLogin">Next</button>
+</div>
+
+<!-- Money Input Screen -->
+<div class="container hidden" id="moneyDiv">
+    <h2>Hello <span id="displayUser"></span>, place your bet</h2>
+    <input type="number" id="money" placeholder="Enter money (1-20)" min="1" max="20" />
+    <div id="moneyError"></div>
+    <button id="btnMoney">Start Game</button>
+    <div id="infoBox">
+        <strong>Note:</strong> Your money determines how many guesses you get.<br />
+        1 unit money = 1 guess (max 20 guesses)
+    </div>
+</div>
+
+<!-- Game Screen -->
+<div class="container hidden" id="gameDiv">
+    <h2>Guess the Number!</h2>
+    <div id="gameInfo" style="margin-bottom:15px; text-align:left; font-size: 14px;">
+        <b>Game Meaning:</b> Guess the secret number between 1-100.<br />
+        <b>Benefits:</b> Improve logic, patience, and decision-making.<br />
+        <b>Drawbacks:</b> Excessive playing wastes time and can cause frustration.<br />
+        <b>Instructions:</b> Enter your guess and submit.
+    </div>
+    <input type="number" id="guessInput" placeholder="Enter guess (1-100)" min="1" max="100" />
+    <button id="btnGuess">Submit Guess</button>
+    <p id="result"></p>
+    <p id="currentGuess"></p>
+    <p id="guessesLeft"></p>
+    <p id="prizePoints">Your Coins: 0</p>
+
+    <!-- Leaderboard section -->
+    <div id="leaderboard">
+      <h3>🏆 Top 3 Winners</h3>
+      <ol id="leaderboardList">
+        <!-- Winners will be listed here -->
+      </ol>
+    </div>
+
+    <button id="btnRestart">Restart Game</button>
+</div>
+
+<script>
+// Variables
+let secretNumber = 0;
+let maxGuesses = 0;
+let guessesMade = 0;
+let username = '';
+let userPhoto = '';
+let prizeCoins = 0;
+
+// Load leaderboard from localStorage or empty array
+let leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || [];
+
+// DOM elements
+const loginDiv = document.getElementById('loginDiv');
+const moneyDiv = document.getElementById('moneyDiv');
+const gameDiv = document.getElementById('gameDiv');
+
+const usernameInput = document.getElementById('username');
+const photoUpload = document.getElementById('photoUpload');
+const photoPreview = document.getElementById('photoPreview');
+const btnLogin = document.getElementById('btnLogin');
+const loginError = document.getElementById('loginError');
+
+const moneyInput = document.getElementById('money');
+const btnMoney = document.getElementById('btnMoney');
+const moneyError = document.getElementById('moneyError');
+const displayUser = document.getElementById('displayUser');
+
+const guessInput = document.getElementById('guessInput');
+const btnGuess = document.getElementById('btnGuess');
+const result = document.getElementById('result');
+const currentGuess = document.getElementById('currentGuess');
+const guessesLeft = document.getElementById('guessesLeft');
+const prizePoints = document.getElementById('prizePoints');
+const btnRestart = document.getElementById('btnRestart');
+
+const leaderboardList = document.getElementById('leaderboardList');
+
+// Photo preview handler
+photoUpload.addEventListener('change', () => {
+    const file = photoUpload.files[0];
+    if(file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+            userPhoto = reader.result;
+            photoPreview.innerHTML = `<img src="${userPhoto}" alt="User Photo" />`;
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+// Login button click
+btnLogin.addEventListener('click', () => {
+    const name = usernameInput.value.trim();
+    if(name === '') {
+        loginError.textContent = "Username cannot be empty!";
+        return;
+    }
+    if(!userPhoto) {
+        loginError.textContent = "Please upload your photo!";
+        return;
+    }
+    loginError.textContent = '';
+    username = name;
+    displayUser.textContent = username;
+    loginDiv.classList.add('hidden');
+    moneyDiv.classList.remove('hidden');
+    moneyInput.focus();
+});
+
+// Money button click
+btnMoney.addEventListener('click', () => {
+    const moneyVal = Number(moneyInput.value);
+    if(!moneyVal || moneyVal < 1 || moneyVal > 20) {
+        moneyError.textContent = "Please enter money between 1 and 20.";
+        return;
+    }
+    moneyError.textContent = '';
+    maxGuesses = moneyVal;
+    moneyDiv.classList.add('hidden');
+    gameDiv.classList.remove('hidden');
+    startGame();
+    updateLeaderboardDisplay(); // Show leaderboard on game screen load
+});
+
+// Start the game
+function startGame() {
+    secretNumber = Math.floor(Math.random() * 100) + 1;
+    guessesMade = 0;
+    result.textContent = '';
+    currentGuess.textContent = '';
+    guessesLeft.textContent = `You have ${maxGuesses} guesses.`;
+    prizePoints.textContent = `Your Coins: ${prizeCoins}`;
+    guessInput.value = '';
+    guessInput.focus();
+}
+
+// Guess button click
+btnGuess.addEventListener('click', () => {
+    if(guessesMade >= maxGuesses) {
+        result.innerHTML = `Game over! No guesses left. The number was ${secretNumber}.`;
+        return;
+    }
+    const guess = Number(guessInput.value);
+    if(!guess || guess < 1 || guess > 100) {
+        result.textContent = 'Enter a valid number between 1 and 100.';
+        currentGuess.textContent = '';
+        return;
+    }
+    guessesMade++;
+    currentGuess.textContent = `Your guess: ${guess}`;
+    if(guess === secretNumber) {
+        prizeCoins += 10; // Reward 10 coins on win
+        result.innerHTML = `
+            <p>🎉 Congrats ${username}! You guessed it right in ${guessesMade} attempts.</p>
+            <img src="${userPhoto}" alt="Winner Photo" style="max-width:120px; border-radius:50%; margin-top:10px;" />
+        `;
+        guessesLeft.textContent = '';
+        prizePoints.textContent = `Your Coins: ${prizeCoins}`;
+
+        // Add/update leaderboard
+        const existingIndex = leaderboard.findIndex(w => w.username === username);
+        if (existingIndex !== -1) {
+            // Update if this attempt count is better (less) or coins more
+            if (guessesMade < leaderboard[existingIndex].attempts || prizeCoins > leaderboard[existingIndex].coins) {
+                leaderboard[existingIndex] = { username, coins: prizeCoins, attempts: guessesMade };
+            }
+        } else {
+            leaderboard.push({ username, coins: prizeCoins, attempts: guessesMade });
+        }
+        // Sort by attempts ascending, then coins descending
+        leaderboard.sort((a, b) => a.attempts - b.attempts || b.coins - a.coins);
+        leaderboard = leaderboard.slice(0, 3); // keep top 3
+
+        saveLeaderboard();
+        updateLeaderboardDisplay();
+
+    } else if(guessesMade === maxGuesses) {
+        result.textContent = `Game over! You've used all ${maxGuesses} guesses. The number was ${secretNumber}.`;
+        guessesLeft.textContent = '';
+    } else if(guess > secretNumber) {
+        result.textContent = 'Your guess is too high.';
+        guessesLeft.textContent = `Guesses left: ${maxGuesses - guessesMade}`;
+    } else {
+        result.textContent = 'Your guess is too low.';
+        guessesLeft.textContent = `Guesses left: ${maxGuesses - guessesMade}`;
+    }
+    guessInput.value = '';
+    guessInput.focus();
+});
+
+// Restart button click
+btnRestart.addEventListener('click', () => {
+    loginDiv.classList.remove('hidden');
+    moneyDiv.classList.add('hidden');
+    gameDiv.classList.add('hidden');
+    usernameInput.value = '';
+    moneyInput.value = '';
+    result.textContent = '';
+    currentGuess.textContent = '';
+    guessesLeft.textContent = '';
+    prizePoints.textContent = 'Your Coins: 0';
+    photoPreview.innerHTML = '';
+    userPhoto = '';
+    prizeCoins = 0;
+    username = '';
+    maxGuesses = 0;
+    guessesMade = 0;
+    loginError.textContent = '';
+    moneyError.textContent = '';
+    usernameInput.focus();
+});
+
+// Save leaderboard to localStorage
+function saveLeaderboard() {
+    localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+}
+
+// Update leaderboard display on game screen
+function updateLeaderboardDisplay() {
+    leaderboardList.innerHTML = '';
+    if (leaderboard.length === 0) {
+        leaderboardList.innerHTML = '<li>No winners yet</li>';
+        return;
+    }
+    leaderboard.forEach((winner) => {
+        leaderboardList.innerHTML += `<li><strong>${winner.username}</strong> - Coins: ${winner.coins}, Attempts: ${winner.attempts}</li>`;
+    });
+}
+</script>
+
+</body>
+</html>
